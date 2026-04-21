@@ -2205,6 +2205,21 @@ function Massnahmen(){
   const [kiBusy,setKiBusy]=useState(false);
   const [kiSuggestion,setKiSuggestion]=useState(null);
   useEffect(()=>{try{localStorage.setItem("gm_mass",JSON.stringify(list));}catch{}},[list]);
+  useEffect(()=>{
+    if(!sel) return;
+    setNewCalc(prev=>({
+      ...prev,
+      name:sel.name,
+      traeger:sel.traeger,
+      invest:sel.invest,
+      kwh:sel.kwh,
+      preis:({strom:stamm.strompreis,gas:stamm.gaspreis,oel:stamm.oelpreis,fernwaerme:stamm.fernwaermepreis}[sel.traeger]||stamm.strompreis)/100,
+      life:sel.life,
+      prio:sel.prio,
+      start:sel.start,
+      co2f:sel.kwh>0?+(sel.co2t*1000/sel.kwh).toFixed(3):0.41
+    }));
+  },[selId]);
 
   const sel=list.find(m=>m.id===selId);
   const visible=list.filter(m=>filter==="all"||m.status===filter);
