@@ -2190,7 +2190,7 @@ function fmtPct(n){return (n>=0?"+":"")+n.toFixed(1)+" %"}
 function fmtYears(n){return !isFinite(n)||n>99?"—":n.toFixed(1)+" a"}
 
 function Massnahmen(){
-  const {stamm}=useContext(AppCtx);
+  const {stamm,lang,t}=useContext(AppCtx);
   const [list,setList]=useState([
     {id:"m1",tmpl:"nacht",status:"umgesetzt",name:"Nachtabsenkung HVAC Halle A+B",traeger:"gas",invest:11800,kwh:175000,co2t:35,life:12,prio:"hoch",start:"Q1 2025",verant:"M. Kreuz"},
     {id:"m2",tmpl:"led",status:"umsetzung",name:"LED-Umrüstung Halle C",traeger:"strom",invest:42000,kwh:96000,co2t:36,life:15,prio:"mittel",start:"Q2 2026",verant:"Instandhaltung"},
