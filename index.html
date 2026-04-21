@@ -65,6 +65,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--g)}
 .chip.b{border-color:rgba(59,130,246,.25);color:#7aa4d4;background:rgba(59,130,246,.05)}
 .chip.w{border-color:rgba(59,130,246,.2);color:#7aa4d4;background:rgba(59,130,246,.04)}
 .chip.r{border-color:rgba(59,130,246,.2);color:#7aa4d4;background:rgba(59,130,246,.04)}
+.chip.y{border-color:rgba(245,158,11,.35);color:#f59e0b;background:rgba(245,158,11,.07)}
 </style>
 </head>
 <body>
@@ -2177,7 +2178,7 @@ const MASS_TEMPLATES=[
   {id:"pv",label:"PV-Dachanlage 400 kWp",icon:"☀️",traeger:"strom",invest:320000,kwh:380000,co2t:144,life:25,desc:"PV-Anlage mit 400 kWp Peak, Eigenverbrauchsquote 72 %, Volleinspeisung Überschuss. Netzparallelbetrieb."}
 ];
 
-const MASS_STATUS={geplant:{c:"b",l:"geplant"},umsetzung:{c:"w",l:"in Umsetzung"},umgesetzt:{c:"g",l:"umgesetzt"},abgelehnt:{c:"r",l:"abgelehnt"}};
+const MASS_STATUS={entwurf:{c:"y",l:"Entwurf"},geplant:{c:"b",l:"geplant"},umsetzung:{c:"w",l:"in Umsetzung"},umgesetzt:{c:"g",l:"umgesetzt"},abgelehnt:{c:"r",l:"abgelehnt"}};
 
 function massStatusChip(s){
   const x=MASS_STATUS[s]||{c:"b",l:s};
@@ -2191,18 +2192,19 @@ function fmtYears(n){return !isFinite(n)||n>99?"—":n.toFixed(1)+" a"}
 
 function Massnahmen(){
   const {stamm,lang,t}=useContext(AppCtx);
-  const [list,setList]=useState([
-    {id:"m1",tmpl:"nacht",status:"umgesetzt",name:"Nachtabsenkung HVAC Halle A+B",traeger:"gas",invest:11800,kwh:175000,co2t:35,life:12,prio:"hoch",start:"Q1 2025",verant:"M. Kreuz"},
-    {id:"m2",tmpl:"led",status:"umsetzung",name:"LED-Umrüstung Halle C",traeger:"strom",invest:42000,kwh:96000,co2t:36,life:15,prio:"mittel",start:"Q2 2026",verant:"Instandhaltung"},
-    {id:"m3",tmpl:"leck",status:"geplant",name:"Leckage-Ortung Druckluft",traeger:"strom",invest:18000,kwh:95000,co2t:36,life:8,prio:"hoch",start:"Q3 2026",verant:"Energieteam"},
-    {id:"m4",tmpl:"pv",status:"geplant",name:"PV-Anlage Dach Halle A",traeger:"strom",invest:320000,kwh:380000,co2t:144,life:25,prio:"strategisch",start:"Q4 2026",verant:"GF"}
-  ]);
+  const DEFAULT_MASS=[{id:"m1",tmpl:"nacht",status:"umgesetzt",name:"Nachtabsenkung HVAC Halle A+B",traeger:"gas",invest:11800,kwh:175000,co2t:35,life:12,prio:"hoch",start:"Q1 2025",verant:"M. Kreuz"},{id:"m2",tmpl:"led",status:"umsetzung",name:"LED-Umrüstung Halle C",traeger:"strom",invest:42000,kwh:96000,co2t:36,life:15,prio:"mittel",start:"Q2 2026",verant:"Instandhaltung"},{id:"m3",tmpl:"leck",status:"geplant",name:"Leckage-Ortung Druckluft",traeger:"strom",invest:18000,kwh:95000,co2t:36,life:8,prio:"hoch",start:"Q3 2026",verant:"Energieteam"},{id:"m4",tmpl:"pv",status:"geplant",name:"PV-Anlage Dach Halle A",traeger:"strom",invest:320000,kwh:380000,co2t:144,life:25,prio:"strategisch",start:"Q4 2026",verant:"GF"}];
+  const [list,setList]=useState(()=>{try{const s=localStorage.getItem("gm_mass");return s?JSON.parse(s):DEFAULT_MASS;}catch{return DEFAULT_MASS;}});
   const [selId,setSelId]=useState("m3");
   const [filter,setFilter]=useState("all");
   const [scenario,setScenario]=useState("real"); // best / real / worst
   const [showNew,setShowNew]=useState(false);
   const [newMode,setNewMode]=useState("tmpl"); // "tmpl" | "calc"
   const [newCalc,setNewCalc]=useState({name:"",traeger:"strom",invest:25000,kwh:27400,preis:0.28,zins:5,pst:3,life:10,rest:0,co2f:0.41,prio:"mittel",start:"Q4 2026"});
+  const [planMode,setPlanMode]=useState(null);
+  const [kiPlanInput,setKiPlanInput]=useState("");
+  const [kiBusy,setKiBusy]=useState(false);
+  const [kiSuggestion,setKiSuggestion]=useState(null);
+  useEffect(()=>{try{localStorage.setItem("gm_mass",JSON.stringify(list));}catch{}},[list]);
 
   const sel=list.find(m=>m.id===selId);
   const visible=list.filter(m=>filter==="all"||m.status===filter);
@@ -2243,17 +2245,45 @@ function Massnahmen(){
     setList([...list,{id,tmpl:t.id,status:"geplant",name:t.label,traeger:t.traeger,invest:t.invest,kwh:t.kwh,co2t:t.co2t,life:t.life,prio:"mittel",start:"Q4 2026",verant:"—"}]);
     setSelId(id);setShowNew(false);
   }
-  function addFromCalc(){
+  function addFromCalc(status="geplant"){
     if(!newCalc.name.trim()) return;
     const id="m"+(Date.now()%100000);
     const kwh=+newCalc.kwh||0;
-    setList([...list,{id,tmpl:"custom",status:"geplant",
+    setList([...list,{id,tmpl:"custom",status,
       name:newCalc.name.trim(),traeger:newCalc.traeger,
       invest:+newCalc.invest||0,kwh:kwh,co2t:+(kwh*(+newCalc.co2f||0)/1000).toFixed(1),life:+newCalc.life||1,
       prio:newCalc.prio,start:newCalc.start||"Q4 2026",verant:"—"}]);
     setSelId(id);setShowNew(false);
     setNewCalc({name:"",traeger:"strom",invest:25000,kwh:27400,preis:0.28,zins:5,pst:3,life:10,rest:0,co2f:0.41,prio:"mittel",start:"Q4 2026"});
     setNewMode("tmpl");
+  }
+  function planWithKi(){
+    if(!kiPlanInput.trim()||kiBusy) return;
+    setKiBusy(true);setKiSuggestion(null);
+    const sys=`Du bist ISO 50001 Energieexperte fuer ${FIRMA} (${stamm.branche}). Antworte NUR mit einem JSON-Objekt, kein anderer Text.`;
+    const prompt=`Erstelle eine konkrete Energieeffizienzmaßnahme fuer: "${kiPlanInput.trim()}"
+Strompreis: ${stamm.strompreis} ct/kWh, Gaspreis: ${stamm.gaspreis} ct/kWh.
+
+JSON (genau dieses Format):
+{"name":"Titel max 50 Zeichen","traeger":"strom","invest":25000,"kwh":80000,"life":12,"co2t":30,"prio":"hoch","beschreibung":"2-3 Saetze zur Maßnahme"}`;
+    fetch("https://controlcenter.lschneider.workers.dev",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:400,system:sys,messages:[{role:"user",content:prompt}]})})
+    .then(r=>r.json()).then(data=>{
+      const raw=(data.content&&data.content[0]&&data.content[0].text)||"";
+      const m=raw.match(/\{[\s\S]*\}/);
+      if(m){try{setKiSuggestion(JSON.parse(m[0]));}catch{setKiSuggestion({error:"JSON-Fehler"});}}
+      else setKiSuggestion({error:"Keine gueltige Antwort erhalten."});
+    }).catch(e=>setKiSuggestion({error:"Netzwerkfehler: "+e.message}))
+    .finally(()=>setKiBusy(false));
+  }
+  function acceptKiSuggestion(status="entwurf"){
+    if(!kiSuggestion||kiSuggestion.error) return;
+    const id="m"+(Date.now()%100000);
+    const s=kiSuggestion;
+    setList([...list,{id,tmpl:"ki",status,name:s.name||"KI-Maßnahme",traeger:s.traeger||"strom",
+      invest:+s.invest||0,kwh:+s.kwh||0,co2t:+s.co2t||0,life:+s.life||10,
+      prio:s.prio||"mittel",start:"Q4 2026",verant:"KI-Agent",beschreibung:s.beschreibung||""}]);
+    setKiSuggestion(null);setKiPlanInput("");setPlanMode(null);setSelId(id);
   }
 
   function updateField(field,value){
@@ -2273,7 +2303,8 @@ function Massnahmen(){
           h("div",{style:{fontSize:18,fontWeight:700}},"Maßnahmen"),
           h("div",{style:{fontSize:16,color:"var(--faint)",marginTop:2,fontFamily:"var(--mono)"}},"DIN 17463 Wirtschaftlichkeitsbewertung · ",list.length," Maßnahmen")),
         h("div",{style:{display:"flex",gap:6}},
-          h("button",{className:"btn",onClick:()=>setShowNew(!showNew)},"+ Neue Maßnahme"),
+          h("button",{className:"btn",onClick:()=>{setShowNew(!showNew);setPlanMode(null);}},"+ Manuell"),
+          h("button",{className:"btn"+(planMode==="ki"?" active":""),onClick:()=>{setPlanMode(planMode==="ki"?null:"ki");setShowNew(false);}},"🤖 KI planen"),
           h("button",{className:"btn-b"},"Export Portfolio"))
       ),
 
@@ -2285,6 +2316,34 @@ function Massnahmen(){
             h("div",{style:{fontSize:24}},t.icon),
             h("div",{style:{fontSize:16,fontWeight:600,marginTop:4,color:"var(--t)"}},t.label),
             h("div",{style:{fontSize:16,fontFamily:"var(--mono)",color:"var(--faint)",marginTop:4}},fmtEuro(t.invest)," · ",fmtKWh(t.kwh)))))),
+
+      planMode==="ki"&&h("div",{className:"fadein",style:{marginBottom:14,padding:14,border:"1px solid var(--b)",background:"var(--s1)",borderRadius:4}},
+        h("div",{style:{fontFamily:"var(--mono)",fontSize:13,color:"var(--faint)",textTransform:"uppercase",letterSpacing:".1em",marginBottom:8}},"KI-Maßnahmenplanung"),
+        h("textarea",{value:kiPlanInput,onChange:e=>setKiPlanInput(e.target.value),
+          placeholder:"Beschreibe das Einsparpotenzial oder Problem, z. B.: „Druckluftanlage Halle B hat ~30 % Leckage, ca. 15 kW Dauerlast“",
+          rows:3,style:{width:"100%",padding:"8px 10px",fontSize:14,border:"1px solid var(--b)",borderRadius:3,background:"var(--s2)",color:"var(--t)",fontFamily:"inherit",resize:"vertical",boxSizing:"border-box"}}),
+        h("div",{style:{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}},
+          h("button",{className:"btn-b",onClick:planWithKi,
+            disabled:!kiPlanInput.trim()||kiBusy,
+            style:{opacity:(!kiPlanInput.trim()||kiBusy)?0.5:1,cursor:(!kiPlanInput.trim()||kiBusy)?"not-allowed":"pointer"}},
+            kiBusy?"KI analysiert…":"KI analysieren"),
+          kiSuggestion&&!kiSuggestion.error&&h("button",{className:"btn",
+            onClick:()=>{setKiPlanInput("");setKiSuggestion(null);}},"× Verwerfen")),
+        kiSuggestion&&(kiSuggestion.error
+          ?h("div",{style:{marginTop:10,padding:"8px 10px",background:"rgba(239,68,68,.1)",border:"1px solid rgba(239,68,68,.2)",borderRadius:3,color:"#f87171",fontSize:14}},kiSuggestion.error)
+          :h("div",{className:"fadein",style:{marginTop:10,border:"1px solid var(--b)",borderRadius:4,overflow:"hidden"}},
+            h("div",{style:{padding:"10px 14px",background:"var(--s3)",borderBottom:"1px solid var(--sep)"}},
+              h("div",{style:{fontWeight:700,fontSize:15,color:"var(--t)"}},"🤖 "+kiSuggestion.name),
+              h("div",{style:{fontSize:13,color:"var(--faint)",marginTop:4}},kiSuggestion.beschreibung)),
+            h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,padding:10}},
+              [{l:"Invest",v:fmtEuro(+kiSuggestion.invest||0)},{l:"Einsparung",v:fmtKWh(+kiSuggestion.kwh||0)+"/a"},
+               {l:"Laufzeit",v:(kiSuggestion.life||10)+" a"},{l:"Priorität",v:kiSuggestion.prio||"mittel"}]
+              .map((k,i)=>h("div",{key:i,style:{padding:"6px 10px",background:"var(--s2)",borderRadius:3}},
+                h("div",{style:{fontSize:12,color:"var(--faint)",fontFamily:"var(--mono)",textTransform:"uppercase"}},k.l),
+                h("div",{style:{fontSize:14,fontWeight:600,color:"var(--t)",marginTop:2}},k.v)))),
+            h("div",{style:{display:"flex",gap:8,padding:"8px 10px",borderTop:"1px solid var(--sep)"}},
+              h("button",{className:"btn",onClick:()=>acceptKiSuggestion("entwurf")},"Als Entwurf"),
+              h("button",{className:"btn-b",onClick:()=>acceptKiSuggestion("geplant")},"Direkt als geplant")))))
 
       // Portfolio KPIs
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}},
@@ -2300,7 +2359,7 @@ function Massnahmen(){
 
       // Filter
       h("div",{style:{display:"flex",gap:6,marginBottom:10}},
-        ["all","geplant","umsetzung","umgesetzt","abgelehnt"].map(f=>
+        ["all","entwurf","geplant","umsetzung","umgesetzt","abgelehnt"].map(f=>
           h("button",{key:f,className:"btn"+(filter===f?" active":""),onClick:()=>setFilter(f)},
             f==="all"?"Alle":MASS_STATUS[f]?.l||f,
             " (",(f==="all"?list:list.filter(m=>m.status===f)).length,")"))),
@@ -2475,8 +2534,10 @@ function Massnahmen(){
           // Aktionen
           h("div",{style:{display:"flex",gap:8,justifyContent:"flex-end",marginBottom:10}},
             h("button",{className:"btn",onClick:()=>setNewCalc({name:"",traeger:"strom",invest:25000,kwh:27400,preis:0.28,zins:5,pst:3,life:10,rest:0,co2f:0.41,prio:"mittel",start:"Q4 2026"})},"Zurücksetzen"),
-            h("button",{className:"btn-b",onClick:addFromCalc,disabled:!newCalc.name.trim(),
-              style:{opacity:newCalc.name.trim()?1:0.5,cursor:newCalc.name.trim()?"pointer":"not-allowed"}},"Speichern → Portfolio")
+            h("button",{className:"btn",onClick:()=>addFromCalc("entwurf"),disabled:!newCalc.name.trim(),
+              style:{opacity:newCalc.name.trim()?1:0.5,cursor:newCalc.name.trim()?"pointer":"not-allowed"}},"Als Entwurf"),
+            h("button",{className:"btn-b",onClick:()=>addFromCalc("geplant"),disabled:!newCalc.name.trim(),
+              style:{opacity:newCalc.name.trim()?1:0.5,cursor:newCalc.name.trim()?"pointer":"not-allowed"}},"Als geplant → Portfolio")
           )
         );
       })()
